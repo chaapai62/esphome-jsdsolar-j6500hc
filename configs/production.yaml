@@ -1,0 +1,728 @@
+substitutions:
+  name: jsdsolar-j6500hc
+  friendly_name: "JSD Solar J6500HC-48"
+
+esphome:
+  name: ${name}
+  friendly_name: ${friendly_name}
+  comment: "JSD Solar J6500HC-48 - production RX-only RS232 passive"
+
+esp32:
+  variant: esp32c3
+  flash_size: 4MB
+  framework:
+    type: esp-idf
+
+logger:
+  hardware_uart: USB_SERIAL_JTAG
+  level: WARN
+
+api:
+  encryption:
+    key: !secret api_encryption_key
+
+ota:
+  - platform: esphome
+
+# Web server local pour diagnostic ponctuel. Ne remplace pas l'API Home Assistant.
+web_server:
+  port: 80
+  version: 3
+  include_internal: false
+
+wifi:
+  output_power: 8.5dBm
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  manual_ip:
+    static_ip: 192.168.0.70
+    gateway: 192.168.0.254
+    subnet: 255.255.255.0
+    
+captive_portal:
+
+# RX seulement : l'ESP ne peut rien envoyer à l'onduleur.
+# Sortie TTL-RX du MAX3232 -> GPIO20.
+# Ne pas ajouter stream_server ici : il consommerait le même UART que le parser.
+# Pour une passerelle TCP brute sur 192.168.x.x:6666, flasher
+# configs/debug-stream-gateway.yaml à la place de ce firmware.
+uart:
+  id: jsd_uart
+  rx_pin: GPIO20
+  baud_rate: 9600
+  data_bits: 8
+  parity: NONE
+  stop_bits: 1
+  rx_buffer_size: 2048
+
+
+globals:
+  - id: jsd_seq
+    type: int
+    restore_value: no
+    initial_value: '-1'
+  - id: jsd_valid_count
+    type: uint32_t
+    restore_value: no
+    initial_value: '0'
+  - id: jsd_crc_count
+    type: uint32_t
+    restore_value: no
+    initial_value: '0'
+  - id: jsd_sequence_count
+    type: uint32_t
+    restore_value: no
+    initial_value: '0'
+  - id: jsd_cycle_count
+    type: uint32_t
+    restore_value: no
+    initial_value: '0'
+  - id: jsd_last_valid_ms
+    type: uint32_t
+    restore_value: no
+    initial_value: '0'
+  - id: jsd_last_cycle_ms
+    type: uint32_t
+    restore_value: no
+    initial_value: '0'
+  - id: jsd_fault_event_count
+    type: uint32_t
+    restore_value: no
+    initial_value: '0'
+  - id: jsd_last_fault_raw_value
+    type: uint16_t
+    restore_value: no
+    initial_value: '0'
+  - id: jsd_event_window
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+
+binary_sensor:
+  - platform: template
+    name: "JSD Liaison RS232"
+    id: jsd_link
+    device_class: connectivity
+    entity_category: diagnostic
+
+  - platform: template
+    name: "JSD Cycle synchronisé"
+    id: jsd_cycle_sync
+    device_class: connectivity
+    entity_category: diagnostic
+
+  - platform: template
+    name: "JSD Événement bit 4"
+    id: jsd_fault_bit4
+    device_class: problem
+    entity_category: diagnostic
+
+  - platform: template
+    name: "JSD Alarme batterie SOC bas suspectée"
+    id: jsd_battery_soc_low_alarm_suspected
+    device_class: problem
+    entity_category: diagnostic
+
+  - platform: template
+    name: "JSD Alarme batterie tension basse suspectée"
+    id: jsd_battery_low_voltage_alarm_suspected
+    device_class: problem
+    entity_category: diagnostic
+
+  - platform: template
+    name: "JSD Températures indisponibles"
+    id: jsd_temperature_unavailable
+    device_class: problem
+    entity_category: diagnostic
+
+text_sensor:
+  - platform: template
+    name: "JSD Numéro de série"
+    id: jsd_serial_number
+    entity_category: diagnostic
+    update_interval: never
+
+
+  - platform: template
+    name: "JSD Dernier événement hex"
+    id: jsd_fault_hex
+    icon: mdi:alert-circle-outline
+    entity_category: diagnostic
+    update_interval: never
+
+sensor:
+  - platform: template
+    name: "JSD Trames FC03 valides"
+    id: jsd_valid_frames
+    state_class: total_increasing
+    accuracy_decimals: 0
+    entity_category: diagnostic
+    lambda: return (float) id(jsd_valid_count);
+    update_interval: 10s
+
+  - platform: template
+    name: "JSD Erreurs CRC"
+    id: jsd_crc_errors
+    state_class: total_increasing
+    accuracy_decimals: 0
+    entity_category: diagnostic
+    lambda: return (float) id(jsd_crc_count);
+    update_interval: 10s
+
+  - platform: template
+    name: "JSD Erreurs de séquence"
+    id: jsd_sequence_errors
+    state_class: total_increasing
+    accuracy_decimals: 0
+    entity_category: diagnostic
+    lambda: return (float) id(jsd_sequence_count);
+    update_interval: 10s
+
+  - platform: template
+    name: "JSD Cycles complets"
+    id: jsd_complete_cycles
+    state_class: total_increasing
+    accuracy_decimals: 0
+    entity_category: diagnostic
+    lambda: return (float) id(jsd_cycle_count);
+    update_interval: 10s
+
+  - platform: template
+    name: "JSD Tension secteur"
+    id: jsd_grid_voltage
+    unit_of_measurement: V
+    device_class: voltage
+    state_class: measurement
+    accuracy_decimals: 1
+    update_interval: never
+
+  - platform: template
+    name: "JSD Courant secteur"
+    id: jsd_grid_current
+    unit_of_measurement: A
+    device_class: current
+    state_class: measurement
+    accuracy_decimals: 2
+    update_interval: never
+
+  - platform: template
+    name: "JSD Fréquence secteur"
+    id: jsd_grid_frequency
+    unit_of_measurement: Hz
+    device_class: frequency
+    state_class: measurement
+    accuracy_decimals: 2
+    update_interval: never
+
+  - platform: template
+    name: "JSD Puissance secteur"
+    id: jsd_grid_power
+    unit_of_measurement: W
+    device_class: power
+    state_class: measurement
+    accuracy_decimals: 0
+    update_interval: never
+
+  - platform: template
+    name: "JSD Tension sortie"
+    id: jsd_output_voltage
+    unit_of_measurement: V
+    device_class: voltage
+    state_class: measurement
+    accuracy_decimals: 1
+    update_interval: never
+
+  - platform: template
+    name: "JSD Courant sortie"
+    id: jsd_output_current
+    unit_of_measurement: A
+    device_class: current
+    state_class: measurement
+    accuracy_decimals: 2
+    update_interval: never
+
+  - platform: template
+    name: "JSD Fréquence sortie"
+    id: jsd_output_frequency
+    unit_of_measurement: Hz
+    device_class: frequency
+    state_class: measurement
+    accuracy_decimals: 2
+    update_interval: never
+
+  - platform: template
+    name: "JSD Puissance active sortie"
+    id: jsd_output_power
+    unit_of_measurement: W
+    device_class: power
+    state_class: measurement
+    accuracy_decimals: 0
+    update_interval: never
+
+  - platform: template
+    name: "JSD Puissance apparente sortie"
+    id: jsd_output_apparent_power
+    unit_of_measurement: VA
+    device_class: apparent_power
+    state_class: measurement
+    accuracy_decimals: 0
+    update_interval: never
+
+  - platform: template
+    name: "JSD Charge sortie"
+    id: jsd_output_load
+    unit_of_measurement: "%"
+    state_class: measurement
+    accuracy_decimals: 1
+    icon: mdi:gauge
+    update_interval: never
+
+  - platform: template
+    name: "JSD Tension batterie"
+    id: jsd_battery_voltage
+    unit_of_measurement: V
+    device_class: voltage
+    state_class: measurement
+    accuracy_decimals: 1
+    update_interval: never
+
+  - platform: template
+    name: "JSD Courant batterie"
+    id: jsd_battery_current
+    unit_of_measurement: A
+    device_class: current
+    state_class: measurement
+    accuracy_decimals: 1
+    icon: mdi:current-dc
+    update_interval: never
+
+  - platform: template
+    name: "JSD Courant décharge batterie"
+    id: jsd_battery_discharge_current
+    unit_of_measurement: A
+    device_class: current
+    state_class: measurement
+    accuracy_decimals: 1
+    update_interval: never
+
+  - platform: template
+    name: "JSD Courant charge batterie"
+    id: jsd_battery_charge_current
+    unit_of_measurement: A
+    device_class: current
+    state_class: measurement
+    accuracy_decimals: 1
+    update_interval: never
+
+  - platform: template
+    name: "JSD SOC batterie"
+    id: jsd_battery_soc
+    unit_of_measurement: "%"
+    device_class: battery
+    state_class: measurement
+    accuracy_decimals: 0
+    update_interval: never
+
+  - platform: template
+    name: "JSD Puissance batterie"
+    id: jsd_battery_power
+    unit_of_measurement: W
+    device_class: power
+    state_class: measurement
+    accuracy_decimals: 0
+    update_interval: never
+
+  - platform: template
+    name: "JSD État énergétique brut"
+    id: jsd_terminal_status_raw
+    accuracy_decimals: 0
+    entity_category: diagnostic
+    update_interval: never
+
+
+  - platform: template
+    name: "JSD État énergétique brut 1"
+    id: jsd_terminal_status_raw_1
+    accuracy_decimals: 0
+    entity_category: diagnostic
+    update_interval: never
+
+  - platform: template
+    name: "JSD État énergétique brut 2"
+    id: jsd_terminal_status_raw_2
+    accuracy_decimals: 0
+    entity_category: diagnostic
+    update_interval: never
+
+  - platform: template
+    name: "JSD État énergétique brut 3"
+    id: jsd_terminal_status_raw_3
+    accuracy_decimals: 0
+    entity_category: diagnostic
+    update_interval: never
+
+  # Réponse FC03 d'un registre observée hors cycle pendant le défaut.
+  # L'adresse Modbus n'étant pas présente dans un dump RX seul, la valeur
+  # reste volontairement exposée comme diagnostic brut.
+  - platform: template
+    name: "JSD Dernier événement brut"
+    id: jsd_fault_raw
+    icon: mdi:alert-circle-outline
+    accuracy_decimals: 0
+    entity_category: diagnostic
+    update_interval: never
+
+  - platform: template
+    name: "JSD Nombre d'événements"
+    id: jsd_fault_events
+    state_class: total_increasing
+    accuracy_decimals: 0
+    entity_category: diagnostic
+    lambda: return (float) id(jsd_fault_event_count);
+    update_interval: 10s
+
+  - platform: template
+    name: "JSD Tension PV1"
+    id: jsd_pv1_voltage
+    unit_of_measurement: V
+    device_class: voltage
+    state_class: measurement
+    accuracy_decimals: 1
+    update_interval: never
+
+  - platform: template
+    name: "JSD Courant PV1"
+    id: jsd_pv1_current
+    unit_of_measurement: A
+    device_class: current
+    state_class: measurement
+    accuracy_decimals: 2
+    update_interval: never
+
+  - platform: template
+    name: "JSD Puissance PV1"
+    id: jsd_pv1_power
+    unit_of_measurement: W
+    device_class: power
+    state_class: measurement
+    accuracy_decimals: 0
+    update_interval: never
+
+  - platform: template
+    name: "JSD Vitesse ventilateur"
+    id: jsd_fan_speed
+    unit_of_measurement: "%"
+    state_class: measurement
+    accuracy_decimals: 0
+    icon: mdi:fan
+    update_interval: never
+
+  - platform: template
+    name: "JSD Température PV1"
+    id: jsd_pv1_temperature
+    unit_of_measurement: "°C"
+    device_class: temperature
+    state_class: measurement
+    accuracy_decimals: 1
+    update_interval: never
+
+  - platform: template
+    name: "JSD Température onduleur"
+    id: jsd_inverter_temperature
+    unit_of_measurement: "°C"
+    device_class: temperature
+    state_class: measurement
+    accuracy_decimals: 1
+    update_interval: never
+
+  - platform: template
+    name: "JSD Température chargeur"
+    id: jsd_charger_temperature
+    unit_of_measurement: "°C"
+    device_class: temperature
+    state_class: measurement
+    accuracy_decimals: 1
+    update_interval: never
+
+  # Deux mots suivant immédiatement le bloc température principal.
+  # Sur un second onduleur, 0x7FFF indique indisponible ; sur le premier,
+  # 0x0640/0x06A4 restent non confirmés et sont exposés en brut.
+  - platform: template
+    name: "JSD Canal thermique brut 4"
+    id: jsd_temperature_raw_4
+    accuracy_decimals: 0
+    entity_category: diagnostic
+    update_interval: never
+
+  - platform: template
+    name: "JSD Canal thermique brut 5"
+    id: jsd_temperature_raw_5
+    accuracy_decimals: 0
+    entity_category: diagnostic
+    update_interval: never
+
+interval:
+  - interval: 5s
+    then:
+      - binary_sensor.template.publish:
+          id: jsd_link
+          state: !lambda |-
+            return id(jsd_last_valid_ms) != 0 &&
+                   (uint32_t)(millis() - id(jsd_last_valid_ms)) < 30000UL;
+      - binary_sensor.template.publish:
+          id: jsd_cycle_sync
+          state: !lambda |-
+            return id(jsd_last_cycle_ms) != 0 &&
+                   (uint32_t)(millis() - id(jsd_last_cycle_ms)) < 30000UL;
+
+  - interval: 5ms
+    then:
+      - lambda: |-
+          static uint8_t rx[192];
+          static size_t used = 0;
+
+          while (id(jsd_uart).available()) {
+            uint8_t c;
+            if (!id(jsd_uart).read_byte(&c)) break;
+            if (used == sizeof(rx)) {
+              for (size_t i = 1; i < used; i++) rx[i - 1] = rx[i];
+              used--;
+              id(jsd_seq) = -1;
+              id(jsd_sequence_count)++;
+            }
+            rx[used++] = c;
+          }
+
+          while (used >= 3) {
+            size_t start = 0;
+            while (start + 1 < used &&
+                   !(rx[start] == 0x01 && rx[start + 1] == 0x03)) start++;
+
+            if (start > 0) {
+              for (size_t i = start; i < used; i++) rx[i - start] = rx[i];
+              used -= start;
+              if (used < 3) break;
+            }
+
+            const uint8_t bc = rx[2];
+            if (bc == 0 || bc > 64 || (bc & 1)) {
+              for (size_t i = 1; i < used; i++) rx[i - 1] = rx[i];
+              used--;
+              id(jsd_seq) = -1;
+              continue;
+            }
+
+            const size_t frame_len = (size_t) bc + 5;
+            if (used < frame_len) break;
+
+            uint16_t crc = 0xFFFF;
+            for (size_t i = 0; i < frame_len - 2; i++) {
+              crc ^= rx[i];
+              for (uint8_t bit = 0; bit < 8; bit++)
+                crc = (crc & 1)
+                    ? (uint16_t)((crc >> 1) ^ 0xA001)
+                    : (uint16_t)(crc >> 1);
+            }
+
+            const uint16_t received_crc =
+                (uint16_t) rx[frame_len - 2] |
+                ((uint16_t) rx[frame_len - 1] << 8);
+
+            if (crc != received_crc) {
+              id(jsd_crc_count)++;
+              id(jsd_seq) = -1;
+              for (size_t i = 1; i < used; i++) rx[i - 1] = rx[i];
+              used--;
+              continue;
+            }
+
+            id(jsd_valid_count)++;
+            id(jsd_last_valid_ms) = millis();
+
+            auto reg_u16 = [&](uint8_t n) -> uint16_t {
+              return ((uint16_t) rx[3 + 2 * n] << 8) |
+                     rx[4 + 2 * n];
+            };
+            auto reg_s16 = [&](uint8_t n) -> int16_t {
+              return (int16_t) reg_u16(n);
+            };
+
+            // Ancre du cycle : réponse SN ASCII sur 20 octets.
+            bool serial_anchor = (bc == 20);
+            for (uint8_t i = 0; serial_anchor && i < 7; i++)
+              serial_anchor = rx[3 + i] >= '0' && rx[3 + i] <= '9';
+
+            if (serial_anchor) {
+              id(jsd_seq) = 0;
+              id(jsd_event_window) = false;
+              std::string serial;
+              serial.reserve(20);
+              for (uint8_t i = 0; i < 20; i++) {
+                if (rx[3 + i] >= 0x20 && rx[3 + i] <= 0x7E)
+                  serial.push_back((char) rx[3 + i]);
+              }
+              if (!serial.empty()) id(jsd_serial_number).publish_state(serial);
+            }
+
+            static const uint8_t expected_bc[17] = {
+              20, 4, 4, 2, 8, 8, 12, 4, 4,
+              8, 6, 2, 6, 4, 32, 16, 16
+            };
+
+            // Trame FC03 courte observée hors cycle après un cycle complet.
+            // En alarme 68/69 (SOC batterie bas), la valeur 0x0010 a été capturée.
+            // L'adresse Modbus n'est pas présente dans une réponse RX seule :
+            // on conserve la valeur comme événement brut et une alarme prudente.
+            if (id(jsd_seq) < 0 && id(jsd_event_window) && bc == 2) {
+              const uint16_t fault_raw = reg_u16(0);
+              id(jsd_last_fault_raw_value) = fault_raw;
+              id(jsd_fault_raw).publish_state(fault_raw);
+              id(jsd_fault_bit4).publish_state((fault_raw & 0x0010U) != 0);
+              id(jsd_battery_soc_low_alarm_suspected).publish_state(
+                  (fault_raw & 0x0010U) != 0 &&
+                  id(jsd_battery_soc).has_state() &&
+                  id(jsd_battery_soc).state <= 5.0f);
+              char fault_text[16];
+              snprintf(fault_text, sizeof(fault_text), "0x%04X", fault_raw);
+              id(jsd_fault_hex).publish_state(fault_text);
+              id(jsd_fault_event_count)++;
+              ESP_LOGW("jsdsolar", "Événement conditionnel brut: %s", fault_text);
+            }
+
+            if (id(jsd_seq) >= 0) {
+              if (bc != expected_bc[id(jsd_seq)]) {
+                id(jsd_sequence_count)++;
+                id(jsd_seq) = -1;
+              } else {
+                switch (id(jsd_seq)) {
+                  case 4:  // état/protection : word2 bit 0x0004 corrélé à l'alarme 52 "BATTERY LOW VOLTAGE"
+                    id(jsd_battery_low_voltage_alarm_suspected).publish_state((reg_u16(2) & 0x0004U) != 0);
+                    break;
+
+                  case 5:  // bloc secteur observé, hypothèse 0x0050..0x0053
+                    id(jsd_grid_voltage).publish_state(reg_s16(0) * 0.1f);
+                    id(jsd_grid_current).publish_state(reg_s16(1) * 0.01f);
+                    id(jsd_grid_frequency).publish_state(reg_s16(2) * 0.01f);
+                    id(jsd_grid_power).publish_state(reg_s16(3));
+                    break;
+
+                  case 6:  // bloc sortie/charge observé, hypothèse 0x0058..0x005D
+                    id(jsd_output_voltage).publish_state(reg_s16(0) * 0.1f);
+                    id(jsd_output_current).publish_state(reg_s16(1) * 0.01f);
+                    id(jsd_output_frequency).publish_state(reg_s16(2) * 0.01f);
+                    id(jsd_output_power).publish_state(reg_s16(3));
+                    id(jsd_output_apparent_power).publish_state(reg_s16(4));
+                    id(jsd_output_load).publish_state(reg_s16(5) * 0.1f);
+                    break;
+
+                  case 7: {  // bloc batterie observé, hypothèse 0x0080..0x0081
+                    const float current = reg_s16(1) * 0.1f;
+                    id(jsd_battery_voltage).publish_state(reg_s16(0) * 0.1f);
+                    id(jsd_battery_current).publish_state(current);
+                    id(jsd_battery_discharge_current).publish_state(
+                        current > 0.0f ? current : 0.0f);
+                    id(jsd_battery_charge_current).publish_state(
+                        current < 0.0f ? -current : 0.0f);
+                    break;
+                  }
+
+                  case 8: { // bloc SOC/puissance batterie observé, hypothèse 0x0084..0x0085
+                    // Le dump indique 79 pour un SOC de 79 %, pas 7,9 %.
+                    const float soc = reg_s16(0);
+                    id(jsd_battery_soc).publish_state(soc);
+                    id(jsd_battery_power).publish_state(reg_s16(1));
+                    id(jsd_battery_soc_low_alarm_suspected).publish_state(
+                        (id(jsd_last_fault_raw_value) & 0x0010U) != 0 && soc <= 5.0f);
+                    break;
+                  }
+
+                  case 9:
+                    id(jsd_terminal_status_raw).publish_state(reg_u16(0));
+                    id(jsd_terminal_status_raw_1).publish_state(reg_u16(1));
+                    id(jsd_terminal_status_raw_2).publish_state(reg_u16(2));
+                    id(jsd_terminal_status_raw_3).publish_state(reg_u16(3));
+                    break;
+
+                  case 10: // bloc PV1 observé, hypothèse 0x0096..0x0098
+                    id(jsd_pv1_voltage).publish_state(reg_s16(0) * 0.1f);
+                    id(jsd_pv1_current).publish_state(reg_s16(1) * 0.01f);
+                    id(jsd_pv1_power).publish_state(reg_s16(2));
+                    break;
+
+                  case 11: { // ventilateur observé, hypothèse 0x0320, valeur brute en %
+                    const uint16_t fan = reg_u16(0);
+                    if (fan <= 100) {
+                      id(jsd_fan_speed).publish_state(fan);
+                    } else {
+                      id(jsd_fan_speed).publish_state(NAN);
+                      ESP_LOGW("jsdsolar", "Ventilateur indisponible/hors plage: 0x%04X", fan);
+                    }
+                    break;
+                  }
+
+                  case 12: { // températures observées, hypothèse 0x0330..0x0332
+                    // 0x7FFF a été observé sur le second onduleur pour les
+                    // cinq canaux thermiques. 0xFFFF et 0x8000 sont aussi
+                    // traités comme sentinelles, jamais comme températures.
+                    bool unavailable = false;
+                    auto publish_temperature = [&](auto *target,
+                                                   uint16_t raw,
+                                                   const char *label) {
+                      if (raw == 0x7FFFU || raw == 0xFFFFU || raw == 0x8000U) {
+                        target->publish_state(NAN);
+                        unavailable = true;
+                        ESP_LOGW("jsdsolar", "%s indisponible: 0x%04X", label, raw);
+                        return;
+                      }
+
+                      const float value = (float) ((int16_t) raw) * 0.1f;
+                      if (value < -40.0f || value > 150.0f) {
+                        target->publish_state(NAN);
+                        unavailable = true;
+                        ESP_LOGW("jsdsolar", "%s hors plage: %.1f C (0x%04X)",
+                                 label, value, raw);
+                        return;
+                      }
+                      target->publish_state(value);
+                    };
+
+                    publish_temperature(id(jsd_pv1_temperature),
+                                        reg_u16(0), "Temperature PV1");
+                    publish_temperature(id(jsd_inverter_temperature),
+                                        reg_u16(1), "Temperature onduleur");
+                    publish_temperature(id(jsd_charger_temperature),
+                                        reg_u16(2), "Temperature chargeur");
+                    id(jsd_temperature_unavailable).publish_state(unavailable);
+                    break;
+                  }
+
+                  case 13: { // deux canaux thermiques supplémentaires, échelle inconnue
+                    const uint16_t raw4 = reg_u16(0);
+                    const uint16_t raw5 = reg_u16(1);
+                    const bool invalid4 = raw4 == 0x7FFFU || raw4 == 0xFFFFU || raw4 == 0x8000U;
+                    const bool invalid5 = raw5 == 0x7FFFU || raw5 == 0xFFFFU || raw5 == 0x8000U;
+
+                    id(jsd_temperature_raw_4).publish_state(invalid4 ? NAN : (float) raw4);
+                    id(jsd_temperature_raw_5).publish_state(invalid5 ? NAN : (float) raw5);
+                    if (invalid4 || invalid5) {
+                      id(jsd_temperature_unavailable).publish_state(true);
+                      ESP_LOGW("jsdsolar", "Canaux thermiques 4/5 indisponibles: 0x%04X 0x%04X",
+                               raw4, raw5);
+                    }
+                    break;
+                  }
+                }
+
+                id(jsd_seq)++;
+                if (id(jsd_seq) == 17) {
+                  id(jsd_cycle_count)++;
+                  id(jsd_last_cycle_ms) = millis();
+                  id(jsd_seq) = -1;
+                  id(jsd_event_window) = true;
+                }
+              }
+            }
+            for (size_t i = frame_len; i < used; i++)
+            rx[i - frame_len] = rx[i];
+            used -= frame_len;
+          }

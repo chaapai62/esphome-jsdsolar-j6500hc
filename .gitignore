@@ -1,0 +1,23 @@
+# ESPHome / secrets
+secrets.yaml
+*.bin
+*.elf
+.esphome/
+__pycache__/
+*.pyc
+
+# Local captures may contain serial numbers and site data
+captures/*.jsonl
+captures/*.json
+captures/*.csv
+!captures/README.md
+
+# Local working copies / backups
+backup/
+work/
+original.yaml
+
+# OS/editor
+.DS_Store
+.vscode/
+.idea/

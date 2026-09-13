@@ -1,0 +1,89 @@
+substitutions:
+  name: jsdsolar-j6500hc-gateway
+  friendly_name: "JSD Solar J6500HC RS232 Gateway"
+
+esphome:
+  name: ${name}
+  friendly_name: ${friendly_name}
+  comment: "JSD Solar J6500HC - passerelle debug TCP 6666 RX-only"
+
+esp32:
+  variant: esp32c3
+  flash_size: 4MB
+  framework:
+    type: esp-idf
+
+logger:
+  hardware_uart: USB_SERIAL_JTAG
+  level: WARN
+
+api:
+  encryption:
+    key: !secret api_encryption_key
+
+ota:
+  - platform: esphome
+
+web_server:
+  port: 80
+  version: 3
+  include_internal: false
+
+wifi:
+  output_power: 8.5dBm
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  manual_ip:
+    # IP différente de la production pour éviter les conflits si les deux firmwares
+    # apparaissent dans Home Assistant / mDNS. Ajuster si nécessaire avant flash.
+    static_ip: 192.168.x.x
+    gateway: 192.168.0.254
+    subnet: 255.255.255.0
+
+captive_portal:
+
+# Composant externe utilisé uniquement pour transformer l'ESP en passerelle TCP.
+# Ne pas utiliser en même temps que le parser passif de production : le flux UART
+# doit avoir un seul consommateur logique.
+external_components:
+  - source: github://oxan/esphome-stream-server
+    components: [stream_server]
+
+# Passerelle brute TX/RX pour debug actif.
+# MAX3232 TTL-RX -> GPIO20 ; MAX3232 TTL-TX <- GPIO21.
+# Attention : avec tx_pin actif, tout client TCP connecté au port 6666 peut envoyer
+# des octets vers l'onduleur. À utiliser uniquement pour tests volontaires.
+uart:
+  id: jsd_uart
+  rx_pin: GPIO20
+  tx_pin: GPIO21
+  baud_rate: 9600
+  data_bits: 8
+  parity: NONE
+  stop_bits: 1
+  rx_buffer_size: 2048
+
+# Passerelle TCP brute compatible avec les scripts de capture du projet.
+stream_server:
+  uart_id: jsd_uart
+  port: 6666
+
+binary_sensor:
+  - platform: status
+    name: "JSD Gateway Statut"
+
+sensor:
+  - platform: wifi_signal
+    name: "JSD Gateway Signal WiFi"
+    update_interval: 60s
+    entity_category: diagnostic
+
+  - platform: uptime
+    name: "JSD Gateway Uptime"
+    update_interval: 60s
+    entity_category: diagnostic
+
+button:
+  - platform: restart
+    name: "JSD Gateway Redémarrer"
+    entity_category: diagnostic

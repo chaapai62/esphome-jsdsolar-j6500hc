@@ -23,6 +23,7 @@ api:
 
 ota:
   - platform: esphome
+    password: !secret ota_password
 
 # Web server local pour diagnostic ponctuel. Ne remplace pas l'API Home Assistant.
 web_server:
@@ -102,36 +103,42 @@ binary_sensor:
   - platform: template
     name: "JSD Liaison RS232"
     id: jsd_link
+    icon: mdi:lan-connect
     device_class: connectivity
     entity_category: diagnostic
 
   - platform: template
     name: "JSD Cycle synchronisé"
     id: jsd_cycle_sync
+    icon: mdi:sync
     device_class: connectivity
     entity_category: diagnostic
 
   - platform: template
     name: "JSD Événement bit 4"
     id: jsd_fault_bit4
+    icon: mdi:alert-circle-outline
     device_class: problem
     entity_category: diagnostic
 
   - platform: template
     name: "JSD Alarme batterie SOC bas suspectée"
     id: jsd_battery_soc_low_alarm_suspected
+    icon: mdi:battery-alert
     device_class: problem
     entity_category: diagnostic
 
   - platform: template
     name: "JSD Alarme batterie tension basse suspectée"
     id: jsd_battery_low_voltage_alarm_suspected
+    icon: mdi:battery-alert-outline
     device_class: problem
     entity_category: diagnostic
 
   - platform: template
     name: "JSD Températures indisponibles"
     id: jsd_temperature_unavailable
+    icon: mdi:thermometer-alert
     device_class: problem
     entity_category: diagnostic
 
@@ -139,6 +146,7 @@ text_sensor:
   - platform: template
     name: "JSD Numéro de série"
     id: jsd_serial_number
+    icon: mdi:identifier
     entity_category: diagnostic
     update_interval: never
 
@@ -154,6 +162,7 @@ sensor:
   - platform: template
     name: "JSD Trames FC03 valides"
     id: jsd_valid_frames
+    icon: mdi:counter
     state_class: total_increasing
     accuracy_decimals: 0
     entity_category: diagnostic
@@ -163,6 +172,7 @@ sensor:
   - platform: template
     name: "JSD Erreurs CRC"
     id: jsd_crc_errors
+    icon: mdi:alert-octagon
     state_class: total_increasing
     accuracy_decimals: 0
     entity_category: diagnostic
@@ -172,6 +182,7 @@ sensor:
   - platform: template
     name: "JSD Erreurs de séquence"
     id: jsd_sequence_errors
+    icon: mdi:format-list-numbered
     state_class: total_increasing
     accuracy_decimals: 0
     entity_category: diagnostic
@@ -181,6 +192,7 @@ sensor:
   - platform: template
     name: "JSD Cycles complets"
     id: jsd_complete_cycles
+    icon: mdi:sync-circle
     state_class: total_increasing
     accuracy_decimals: 0
     entity_category: diagnostic
@@ -190,6 +202,7 @@ sensor:
   - platform: template
     name: "JSD Tension secteur"
     id: jsd_grid_voltage
+    icon: mdi:transmission-tower
     unit_of_measurement: V
     device_class: voltage
     state_class: measurement
@@ -199,6 +212,7 @@ sensor:
   - platform: template
     name: "JSD Courant secteur"
     id: jsd_grid_current
+    icon: mdi:current-ac
     unit_of_measurement: A
     device_class: current
     state_class: measurement
@@ -208,6 +222,7 @@ sensor:
   - platform: template
     name: "JSD Fréquence secteur"
     id: jsd_grid_frequency
+    icon: mdi:sine-wave
     unit_of_measurement: Hz
     device_class: frequency
     state_class: measurement
@@ -217,6 +232,7 @@ sensor:
   - platform: template
     name: "JSD Puissance secteur"
     id: jsd_grid_power
+    icon: mdi:flash
     unit_of_measurement: W
     device_class: power
     state_class: measurement
@@ -226,6 +242,7 @@ sensor:
   - platform: template
     name: "JSD Tension sortie"
     id: jsd_output_voltage
+    icon: mdi:power-plug
     unit_of_measurement: V
     device_class: voltage
     state_class: measurement
@@ -235,6 +252,7 @@ sensor:
   - platform: template
     name: "JSD Courant sortie"
     id: jsd_output_current
+    icon: mdi:current-ac
     unit_of_measurement: A
     device_class: current
     state_class: measurement
@@ -244,6 +262,7 @@ sensor:
   - platform: template
     name: "JSD Fréquence sortie"
     id: jsd_output_frequency
+    icon: mdi:sine-wave
     unit_of_measurement: Hz
     device_class: frequency
     state_class: measurement
@@ -253,6 +272,7 @@ sensor:
   - platform: template
     name: "JSD Puissance active sortie"
     id: jsd_output_power
+    icon: mdi:flash
     unit_of_measurement: W
     device_class: power
     state_class: measurement
@@ -262,6 +282,7 @@ sensor:
   - platform: template
     name: "JSD Puissance apparente sortie"
     id: jsd_output_apparent_power
+    icon: mdi:flash-outline
     unit_of_measurement: VA
     device_class: apparent_power
     state_class: measurement
@@ -280,6 +301,7 @@ sensor:
   - platform: template
     name: "JSD Tension batterie"
     id: jsd_battery_voltage
+    icon: mdi:battery-medium
     unit_of_measurement: V
     device_class: voltage
     state_class: measurement
@@ -299,6 +321,7 @@ sensor:
   - platform: template
     name: "JSD Courant décharge batterie"
     id: jsd_battery_discharge_current
+    icon: mdi:battery-minus
     unit_of_measurement: A
     device_class: current
     state_class: measurement
@@ -308,6 +331,7 @@ sensor:
   - platform: template
     name: "JSD Courant charge batterie"
     id: jsd_battery_charge_current
+    icon: mdi:battery-plus
     unit_of_measurement: A
     device_class: current
     state_class: measurement
@@ -317,6 +341,7 @@ sensor:
   - platform: template
     name: "JSD SOC batterie"
     id: jsd_battery_soc
+    icon: mdi:battery-70
     unit_of_measurement: "%"
     device_class: battery
     state_class: measurement
@@ -326,6 +351,7 @@ sensor:
   - platform: template
     name: "JSD Puissance batterie"
     id: jsd_battery_power
+    icon: mdi:battery-charging
     unit_of_measurement: W
     device_class: power
     state_class: measurement
@@ -335,6 +361,7 @@ sensor:
   - platform: template
     name: "JSD État énergétique brut"
     id: jsd_terminal_status_raw
+    icon: mdi:code-braces
     accuracy_decimals: 0
     entity_category: diagnostic
     update_interval: never
@@ -343,6 +370,7 @@ sensor:
   - platform: template
     name: "JSD État énergétique brut 1"
     id: jsd_terminal_status_raw_1
+    icon: mdi:code-braces
     accuracy_decimals: 0
     entity_category: diagnostic
     update_interval: never
@@ -350,6 +378,7 @@ sensor:
   - platform: template
     name: "JSD État énergétique brut 2"
     id: jsd_terminal_status_raw_2
+    icon: mdi:code-braces
     accuracy_decimals: 0
     entity_category: diagnostic
     update_interval: never
@@ -357,6 +386,7 @@ sensor:
   - platform: template
     name: "JSD État énergétique brut 3"
     id: jsd_terminal_status_raw_3
+    icon: mdi:code-braces
     accuracy_decimals: 0
     entity_category: diagnostic
     update_interval: never
@@ -375,6 +405,7 @@ sensor:
   - platform: template
     name: "JSD Nombre d'événements"
     id: jsd_fault_events
+    icon: mdi:counter
     state_class: total_increasing
     accuracy_decimals: 0
     entity_category: diagnostic
@@ -384,6 +415,7 @@ sensor:
   - platform: template
     name: "JSD Tension PV1"
     id: jsd_pv1_voltage
+    icon: mdi:solar-power
     unit_of_measurement: V
     device_class: voltage
     state_class: measurement
@@ -393,6 +425,7 @@ sensor:
   - platform: template
     name: "JSD Courant PV1"
     id: jsd_pv1_current
+    icon: mdi:current-dc
     unit_of_measurement: A
     device_class: current
     state_class: measurement
@@ -402,6 +435,7 @@ sensor:
   - platform: template
     name: "JSD Puissance PV1"
     id: jsd_pv1_power
+    icon: mdi:solar-power
     unit_of_measurement: W
     device_class: power
     state_class: measurement
@@ -420,6 +454,7 @@ sensor:
   - platform: template
     name: "JSD Température PV1"
     id: jsd_pv1_temperature
+    icon: mdi:thermometer-solar
     unit_of_measurement: "°C"
     device_class: temperature
     state_class: measurement
@@ -429,6 +464,7 @@ sensor:
   - platform: template
     name: "JSD Température onduleur"
     id: jsd_inverter_temperature
+    icon: mdi:thermometer
     unit_of_measurement: "°C"
     device_class: temperature
     state_class: measurement
@@ -438,6 +474,7 @@ sensor:
   - platform: template
     name: "JSD Température chargeur"
     id: jsd_charger_temperature
+    icon: mdi:thermometer-chevron-up
     unit_of_measurement: "°C"
     device_class: temperature
     state_class: measurement
@@ -450,6 +487,7 @@ sensor:
   - platform: template
     name: "JSD Canal thermique brut 4"
     id: jsd_temperature_raw_4
+    icon: mdi:thermometer-alert
     accuracy_decimals: 0
     entity_category: diagnostic
     update_interval: never
@@ -457,6 +495,7 @@ sensor:
   - platform: template
     name: "JSD Canal thermique brut 5"
     id: jsd_temperature_raw_5
+    icon: mdi:thermometer-alert
     accuracy_decimals: 0
     entity_category: diagnostic
     update_interval: never
